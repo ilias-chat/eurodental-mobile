@@ -3,6 +3,8 @@
   "compilerOptions": {
     "strict": true,
     "paths": {
+      "@api/*": ["api/*"],
+      "@constants/*": ["constants/*"],
       "@/*": [
         "./*"
       ]
@@ -12,6 +14,7 @@
     "**/*.ts",
     "**/*.tsx",
     ".expo/types/**/*.ts",
-    "expo-env.d.ts"
-  ]
+    "expo-env.d.ts",
+    "app/(tabs)/clients.js", "aapp/login.js", "api/axios.js", "api/storage.js", "app/forgot-password.js", "app/(tabs)/stock.js", "app/(tabs)/tasks.js" 
+ ]
 }
