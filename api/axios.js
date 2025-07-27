@@ -2,7 +2,7 @@ import axios from 'axios';
 import { getToken } from './storage';
 
 const api = axios.create({
-  baseURL: 'https://cb9a-160-178-93-78.ngrok-free.app/api',  // <-- PUT your Laravel API URL here
+  baseURL: 'https://91e8c33cf356.ngrok-free.app/api',  // <-- PUT your Laravel API URL here
   timeout: 5000,
 });
 
