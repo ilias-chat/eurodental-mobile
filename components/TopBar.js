@@ -11,13 +11,19 @@ export default function TopBar() {
   const { dark } = useTheme();
   const color = dark ? Colors.dark : Colors.light;
   const { openDrawer } = useDrawer();
-   const { user } = useAuth();
+  const { user } = useAuth();
 
   const getInitials = (name) => {
+    if (!name || typeof name !== 'string') return '';
     const names = name.split(' ');
-    const initials = names.map(n => n[0].toUpperCase()).join('');
+    const initials = names.map(n => n[0]?.toUpperCase() || '').join('');
     return initials.substring(0, 2);
   };
+
+  // Don't render if user is null (during logout)
+  if (!user) {
+    return null;
+  }
 
   return (
     <>
@@ -30,11 +36,11 @@ export default function TopBar() {
 
 
         <TouchableOpacity onPress={openDrawer}>
-          {user.image ? (
+          {user && user.image ? (
             <Image source={{ uri: user.image }} style={styles.avatar} />
           ) : (
             <View style={[styles.avatar, { backgroundColor: color.primary }]}>
-              <Text style={[styles.avatarText, {color: color.background}]}>{getInitials(user.name)}</Text>
+              <Text style={[styles.avatarText, {color: color.background}]}>{getInitials(user?.name || '')}</Text>
             </View>
           )}
         </TouchableOpacity>

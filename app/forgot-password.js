@@ -1,7 +1,8 @@
 import { useTheme } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import api from '../api/axios';
 import { Colors } from '../constants/Colors';
 
@@ -15,11 +16,7 @@ export default function ForgotPassword() {
 
   const handleForgotPassword = async () => {
     if (!email) {
-      Toast.show({
-        type: 'error',
-        text1: 'Erreur',
-        text2: 'Veuillez entrer votre adresse e-mail.',
-      });
+      Alert.alert('Erreur', 'Veuillez entrer votre adresse e-mail.');
       return;
     }
   
@@ -53,50 +50,145 @@ export default function ForgotPassword() {
   
 
   return (
-    <View style={[styles.container, { backgroundColor: color.background }]}>
-      <Text style={[styles.title, { color: color.text }]}>Mot de passe oublié</Text>
+    <SafeAreaView style={[styles.container, { backgroundColor: color.background }]}>
+      <KeyboardAvoidingView 
+        style={styles.keyboardView}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        enabled
+      >
+        <View style={styles.content}>
+          <View style={styles.header}>
+            <Image
+              source={{ uri: 'https://eurodental.ma/storage/uploads/page_blocks/cvHUbpQ5qSVioTrcPJB4go5oZvnKLeY4vAg7bHjl.png' }}
+              style={styles.logo}
+              resizeMode="contain"
+            />
+            
+            <Text style={[styles.title, { color: color.text }]}>Mot de passe oublié</Text>
+            <Text style={[styles.subtitle, { color: color.icon }]}>Entrez votre email pour récupérer votre mot de passe</Text>
+          </View>
 
-      <TextInput
-        placeholder="Email"
-        value={email}
-        onChangeText={setEmail}
-        autoCapitalize="none"
-        style={[styles.input, { borderColor: color.icon, color: color.text }]}
-        placeholderTextColor={dark ? '#888' : '#AAA'}
-      />
+          <View style={styles.form}>
+            <View style={styles.inputGroup}>
+              <TextInput
+                placeholder="Entrez votre email"
+                value={email}
+                onChangeText={setEmail}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                style={[styles.input, { 
+                  borderColor: color.icon, 
+                  color: color.text,
+                  backgroundColor: dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)'
+                }]}
+                placeholderTextColor={dark ? '#666' : '#999'}
+              />
+            </View>
 
-      <TouchableOpacity style={[styles.button, { backgroundColor: color.primary }]} onPress={handleForgotPassword} disabled={loading}>
-        {loading ? (
-          <ActivityIndicator color="white" />
-        ) : (
-          <Text style={[styles.buttonText, { color: 'white' }]}>Envoyer</Text>
-        )}
-      </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.button, { backgroundColor: color.primary }]} 
+              onPress={handleForgotPassword} 
+              disabled={loading}
+              activeOpacity={0.8}
+            >
+              {loading ? (
+                <ActivityIndicator color="white" size="small" />
+              ) : (
+                <Text style={styles.buttonText}>Envoyer</Text>
+              )}
+            </TouchableOpacity>
 
-      <TouchableOpacity onPress={() => router.replace('/login')}>
-        <Text style={[styles.forgotText, { color: color.primary }]}>Retour à la connexion</Text>
-      </TouchableOpacity>
-    </View>
+            <TouchableOpacity 
+              onPress={() => router.replace('/login')}
+              style={styles.backButton}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.backText, { color: color.primary }]}>Retour à la connexion</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1, justifyContent: 'center', alignItems: 'center'
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  keyboardView: {
+    flex: 1,
+  },
+  content: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+    paddingTop: Platform.OS === 'ios' ? 0 : 40,
+  },
+  header: {
+    alignItems: 'center',
+    marginBottom: 32,
+  },
+  logo: {
+    width: 250,
+    height: 150,
+    marginBottom: 24,
   },
   title: {
-    fontSize: 24, fontWeight: 'bold', marginBottom: 24
+    fontSize: 28,
+    fontWeight: '700',
+    marginBottom: 8,
+    letterSpacing: -0.5,
+  },
+  subtitle: {
+    fontSize: 16,
+    fontWeight: '400',
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  form: {
+    width: '100%',
+  },
+  inputGroup: {
+    marginBottom: 24,
   },
   input: {
-    width: 300, height: 50, borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, marginBottom: 16
+    width: '100%',
+    height: 56,
+    borderWidth: 1.5,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    fontSize: 16,
+    fontWeight: '400',
   },
   button: {
-    width: 300, height: 50, borderRadius: 8, justifyContent: 'center', alignItems: 'center', marginBottom: 16
+    width: '100%',
+    height: 56,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   buttonText: {
-    fontSize: 18
+    fontSize: 18,
+    fontWeight: '600',
+    color: 'white',
+    letterSpacing: -0.3,
   },
-  forgotText: {
-    fontSize: 16
+  backButton: {
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  backText: {
+    fontSize: 16,
+    fontWeight: '500',
+    textDecorationLine: 'underline',
   }
 });
