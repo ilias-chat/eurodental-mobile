@@ -1,10 +1,10 @@
 import api from '@api/axios';
 import { Colors } from '@constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '@react-navigation/native';
+import { useNavigation, useTheme } from '@react-navigation/native';
 import debounce from 'lodash.debounce';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, Image, Linking, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, Image, Linking, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 
 export default function Clients() {
@@ -17,11 +17,16 @@ export default function Clients() {
 
   const { dark } = useTheme();
   const color = dark ? Colors.dark : Colors.light;
+  const navigation = useNavigation();
 
   const handleCall = (phoneNumber) => {
     if (!phoneNumber) return;
   
     Linking.openURL(`tel:${phoneNumber}`);
+  };
+
+  const handleClientPress = (client) => {
+    navigation.navigate('client-details', { clientId: client.id });
   };  
 
   const loadClients = async (reset = false) => {
@@ -75,7 +80,11 @@ export default function Clients() {
   };
 
   const renderItem = ({ item }) => (
-    <View style={[styles.clientItem, { borderColor: color.icon, backgroundColor: color.background }]}>
+    <TouchableOpacity 
+      style={[styles.clientItem, { borderColor: color.icon, backgroundColor: color.background }]}
+      onPress={() => handleClientPress(item)}
+      activeOpacity={0.7}
+    >
       {item.image_url ? (
         <Image source={{ uri: item.image_url }} style={styles.avatar} />
       ) : (
@@ -86,7 +95,7 @@ export default function Clients() {
   
       <View style={styles.clientInfo}>
         <Text style={[styles.name, { color: color.text }]}>{item.name}</Text>
-        <Text style={[styles.subText, { color: color.icon }]}>{item.email || item.phone}</Text>
+        <Text style={[styles.subText, { color: color.icon }]}>{item.city || 'N/A'}</Text>
       </View>
   
       {/* Floating call button */}
@@ -101,7 +110,7 @@ export default function Clients() {
           onPress={() => handleCall(item.phone)}
         />
       </View>
-    </View>
+    </TouchableOpacity>
   );  
 
   const renderHeader = () => (

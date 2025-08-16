@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@react-navigation/native';
 import dayjs from 'dayjs';
 import * as Haptics from 'expo-haptics';
+import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Dimensions, FlatList, Image, Linking, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { TabView } from 'react-native-tab-view';
@@ -85,7 +86,7 @@ function DateTab({ date, selected, onPress, color }) {
 }
 
 // Task Details Modal Component
-function TaskDetailsModal({ visible, task, onClose, color, onStartTask, onFinishTask, isLoading }) {
+function TaskDetailsModal({ visible, task, onClose, color, onStartTask, onFinishTask, isLoading, onNavigateToClient }) {
   // Add comprehensive safety checks
   if (!visible || !task || !task.client) {
     console.log('TaskDetailsModal: Missing required data', { visible, hasTask: !!task, hasClient: !!(task && task.client) });
@@ -136,19 +137,32 @@ function TaskDetailsModal({ visible, task, onClose, color, onStartTask, onFinish
   };
 
   const handleOpenMaps = () => {
-    // Try to get address from various possible field names (excluding city name)
+    // Get address and city from client
     const address = task?.client?.address || 
                    task?.client?.full_address || 
                    task?.client?.street_address || 
                    task?.client?.location;
+    const city = task?.client?.city_name;
     
+    // Combine address and city for better map accuracy
+    let fullLocation = '';
     if (address && address.trim() !== '' && address !== 'null') {
-      const encodedAddress = encodeURIComponent(address);
-      Linking.openURL(`https://maps.google.com/?q=${encodedAddress}`);
+      fullLocation = address;
+      if (city && city.trim() !== '' && city !== 'null') {
+        fullLocation += `, ${city}`;
+      }
+    } else if (city && city.trim() !== '' && city !== 'null') {
+      fullLocation = city;
+    }
+    
+    if (fullLocation.trim() !== '') {
+      const encodedLocation = encodeURIComponent(fullLocation);
+      Linking.openURL(`https://maps.google.com/?q=${encodedLocation}`);
+      showToast(`Ouverture des cartes pour: ${fullLocation}`, 'success');
     } else {
       Alert.alert(
-        'Address Not Available',
-        'Address information is not available for this client.',
+        'Location Not Available',
+        'Address and city information is not available for this client.',
         [{ text: 'OK', style: 'default' }]
       );
     }
@@ -306,40 +320,34 @@ function TaskDetailsModal({ visible, task, onClose, color, onStartTask, onFinish
                       const status = taskStatus;
                       if (status === 'terminée') {
                         return {
-                          backgroundColor: 'rgba(0, 200, 81, 0.15)', // Green with very low opacity
-                          borderColor: '#00C851', // Green border
+                          backgroundColor: '#10B981', // Green background (same as stock screen)
+                          borderColor: '#059669', // Green border
                           borderWidth: 1,
                         };
                       } else if (status === 'en cours') {
                         return {
-                          backgroundColor: 'rgba(255, 193, 7, 0.15)', // Yellow with very low opacity
-                          borderColor: '#FFC107', // Yellow border
+                          backgroundColor: '#F59E0B', // Yellow background (same as stock screen)
+                          borderColor: '#D97706', // Yellow border
                           borderWidth: 1,
                         };
                       } else if (status === 'en attente') {
                         return {
-                          backgroundColor: 'rgba(255, 77, 79, 0.15)', // Red with very low opacity
-                          borderColor: '#FF4D4F', // Red border
+                          backgroundColor: '#EF4444', // Red background (same as stock screen)
+                          borderColor: '#DC2626', // Red border
                           borderWidth: 1,
                         };
                       }
                       return {
-                        backgroundColor: 'rgba(108, 112, 118, 0.15)', // Gray with very low opacity
-                        borderColor: '#6C757D', // Gray border
+                        backgroundColor: '#6B7280', // Gray background
+                        borderColor: '#4B5563', // Gray border
                         borderWidth: 1,
                       };
                     };
 
                     const getTextStyle = () => {
                       const status = taskStatus;
-                      if (status === 'terminée') {
-                        return { color: '#006400' }; // Dark green text
-                      } else if (status === 'en cours') {
-                        return { color: '#B8860B' }; // Dark yellow text
-                      } else if (status === 'en attente') {
-                        return { color: '#B22222' }; // Dark red text
-                      }
-                      return { color: '#495057' }; // Dark gray text
+                      // All status text is now white for better contrast on colored backgrounds
+                      return { color: 'white' };
                     };
 
                     const badgeStyle = getBadgeStyle();
@@ -403,7 +411,7 @@ function TaskDetailsModal({ visible, task, onClose, color, onStartTask, onFinish
                         style={[
                           styles.modalTaskActionButton, 
                           { 
-                            backgroundColor: isLoading ? '#FFC10780' : '#FFC107',
+                            backgroundColor: isLoading ? color.primary + '80' : color.primary,
                             opacity: isLoading ? 0.7 : 1
                           }
                         ]}
@@ -414,7 +422,10 @@ function TaskDetailsModal({ visible, task, onClose, color, onStartTask, onFinish
                         {isLoading ? (
                           <ActivityIndicator size="small" color="white" />
                         ) : (
-                          <Text style={styles.modalTaskActionButtonText}>Démarrer</Text>
+                          <>
+                            <Ionicons name="play" size={16} color="white" style={styles.modalTaskActionButtonIcon} />
+                            <Text style={styles.modalTaskActionButtonText}>Démarrer</Text>
+                          </>
                         )}
                       </TouchableOpacity>
                     );
@@ -424,7 +435,7 @@ function TaskDetailsModal({ visible, task, onClose, color, onStartTask, onFinish
                         style={[
                           styles.modalTaskActionButton, 
                           { 
-                            backgroundColor: isLoading ? '#00C85180' : '#00C851',
+                            backgroundColor: isLoading ? color.primary + '80' : color.primary,
                             opacity: isLoading ? 0.7 : 1
                           }
                         ]}
@@ -435,7 +446,10 @@ function TaskDetailsModal({ visible, task, onClose, color, onStartTask, onFinish
                         {isLoading ? (
                           <ActivityIndicator size="small" color="white" />
                         ) : (
-                          <Text style={styles.modalTaskActionButtonText}>Terminer</Text>
+                          <>
+                            <Ionicons name="flag" size={16} color="white" style={styles.modalTaskActionButtonIcon} />
+                            <Text style={styles.modalTaskActionButtonText}>Terminer</Text>
+                          </>
                         )}
                       </TouchableOpacity>
                     );
@@ -532,9 +546,7 @@ function TaskDetailsModal({ visible, task, onClose, color, onStartTask, onFinish
                         opacity: isLoading ? 0.7 : 1
                       }
                     ]}
-                    onPress={() => {
-                      // Client details button - code to be added later
-                    }}
+                    onPress={onNavigateToClient}
                     disabled={isLoading}
                     activeOpacity={isLoading ? 0.5 : 0.8}
                   >
@@ -741,40 +753,34 @@ function TaskCard({ task, color, onTaskPress }) {
     const status = getSafeText(task.status);
     if (status === 'terminée') {
       return {
-        backgroundColor: 'rgba(0, 200, 81, 0.15)', // Green with very low opacity
-        borderColor: '#00C851', // Green border
+        backgroundColor: '#10B981', // Green background (same as stock screen)
+        borderColor: '#059669', // Green border
         borderWidth: 1,
       };
     } else if (status === 'en cours') {
       return {
-        backgroundColor: 'rgba(255, 193, 7, 0.15)', // Yellow with very low opacity
-        borderColor: '#FFC107', // Yellow border
+        backgroundColor: '#F59E0B', // Yellow background (same as stock screen)
+        borderColor: '#D97706', // Yellow border
         borderWidth: 1,
       };
     } else if (status === 'en attente') {
       return {
-        backgroundColor: 'rgba(255, 77, 79, 0.15)', // Red with very low opacity
-        borderColor: '#FF4D4F', // Red border
+        backgroundColor: '#EF4444', // Red background (same as stock screen)
+        borderColor: '#DC2626', // Red border
         borderWidth: 1,
       };
     }
     return {
-      backgroundColor: 'rgba(108, 112, 118, 0.15)', // Gray with very low opacity
-      borderColor: '#6C757D', // Gray border
+      backgroundColor: '#6B7280', // Gray background
+      borderColor: '#4B5563', // Gray border
       borderWidth: 1,
     };
   };
 
   const getTextStyle = () => {
     const status = getSafeText(task.status);
-    if (status === 'terminée') {
-      return { color: '#006400' }; // Dark green text
-    } else if (status === 'en cours') {
-      return { color: '#B8860B' }; // Dark yellow text
-    } else if (status === 'en attente') {
-      return { color: '#B22222' }; // Dark red text
-    }
-    return { color: '#495057' }; // Dark gray text
+    // All status text is now white for better contrast on colored backgrounds
+    return { color: 'white' };
   };
 
   const getUrgentDotColor = () => {
@@ -851,6 +857,7 @@ const initialDates = Array.from({ length: TOTAL_TABS }, (_, i) =>
 export default function Tasks() {
   const { user } = useAuth();
   const { dark } = useTheme();
+  const router = useRouter();
   const color = dark ? Colors.dark : Colors.light;
   const [selectedDate, setSelectedDate] = useState(today);
   const [dates, setDates] = useState(initialDates);
@@ -1296,6 +1303,12 @@ export default function Tasks() {
         onStartTask={handleStartTask}
         onFinishTask={handleFinishTask}
         isLoading={taskActionLoading}
+        onNavigateToClient={() => {
+          if (selectedTask?.client?.id) {
+            router.push(`/client-details?clientId=${selectedTask.client.id}`);
+            closeModal();
+          }
+        }}
       />
       
       {/* Floating Action Button */}
@@ -1585,7 +1598,6 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 16,
     marginLeft: 12,
-    // Remove backgroundColor and color as they're now set dynamically
   },
   modalStatusText: {
     fontSize: 12,
@@ -1696,12 +1708,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalTaskActionButton: {
-    minWidth: 80,
+    minWidth: 100,
     height: 44,
     borderRadius: 12,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 16,
+    gap: 6,
   },
   modalTaskCommentButton: {
     width: 44,
@@ -1712,10 +1726,13 @@ const styles = StyleSheet.create({
   },
   modalTaskActionButtonText: {
     color: 'white',
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: 'bold',
     textAlign: 'center',
     numberOfLines: 1,
+  },
+  modalTaskActionButtonIcon: {
+    marginRight: 2,
   },
   
   // Floating Action Button styles
