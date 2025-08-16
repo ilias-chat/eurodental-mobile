@@ -1,9 +1,11 @@
 import api from '@/api/axios'; // <-- Use the axios instance
 import { useAuth } from '@/components/AuthContext';
+
 import { Colors } from '@/constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@react-navigation/native';
 import dayjs from 'dayjs';
+import * as Haptics from 'expo-haptics';
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Dimensions, FlatList, Image, Linking, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { TabView } from 'react-native-tab-view';
@@ -22,6 +24,13 @@ function getWeekDates(selectedDate) {
   // Returns an array of 7 days centered on selectedDate
   const startOfWeek = dayjs(selectedDate).startOf('week');
   return Array.from({ length: DAYS_TO_SHOW }, (_, i) => startOfWeek.add(i, 'day'));
+}
+
+// Function to generate 21 days centered on a specific date
+function generateDateRange(centerDate) {
+  return Array.from({ length: TOTAL_TABS }, (_, i) =>
+    centerDate.clone().add(i - 10, 'day') // 10 before + center + 10 after
+  );
 }
 
 // Helper to get label for each date
@@ -76,7 +85,7 @@ function DateTab({ date, selected, onPress, color }) {
 }
 
 // Task Details Modal Component
-function TaskDetailsModal({ visible, task, onClose, color }) {
+function TaskDetailsModal({ visible, task, onClose, color, onStartTask, onFinishTask, isLoading }) {
   // Add comprehensive safety checks
   if (!visible || !task || !task.client) {
     console.log('TaskDetailsModal: Missing required data', { visible, hasTask: !!task, hasClient: !!(task && task.client) });
@@ -238,6 +247,7 @@ function TaskDetailsModal({ visible, task, onClose, color }) {
       transparent={true}
       animationType="fade"
       onRequestClose={onClose}
+      statusBarTranslucent={true}
     >
       <View style={styles.modalOverlay}>
         <View style={[styles.modalContent, { backgroundColor: color.background }]}>
@@ -344,45 +354,41 @@ function TaskDetailsModal({ visible, task, onClose, color }) {
                   })()}
                   
                   {/* Urgent Badge - Below Status Badge */}
-                  {(() => {
-                    console.log('Urgent badge check:', { urgent: task.urgent, type: typeof task.urgent, value: task.urgent });
-                    // Handle different possible urgent values
-                    const isUrgent = task.urgent === true || task.urgent === 1 || task.urgent === '1' || task.urgent === 'true';
-                    console.log('Is urgent calculated:', isUrgent);
-                    return isUrgent ? (
-                      <View style={[styles.modalUrgentBadge, { backgroundColor: '#FF4D4F' }]}>
-                        <Text style={styles.modalUrgentText}>URGENT</Text>
-                      </View>
-                    ) : null;
-                  })()}
+                  {(task.urgent === true || task.urgent === 1 || task.urgent === '1' || task.urgent === 'true') ? (
+                    <View style={[styles.modalUrgentBadge, { backgroundColor: '#FF4D4F' }]}>
+                      <Text style={styles.modalUrgentText}>URGENT</Text>
+                    </View>
+                  ) : null}
                 </View>
               </View>
 
-              {(() => {
-                const description = getSafeText(task.description);
-                return description ? (
-                  <Text style={[styles.modalDescription, { color: color.text }]}>{description}</Text>
-                ) : null;
-              })()}
+              {getSafeText(task.description) ? (
+                <Text style={[styles.modalDescription, { color: color.text }]}>{getSafeText(task.description)}</Text>
+              ) : null}
 
-              {(() => {
-                const observation = getSafeText(task.observation);
-                return observation ? (
-                  <View style={styles.modalSection}>
-                    <Text style={[styles.modalSectionTitle, { color: color.text }]}>Observation</Text>
-                    <Text style={[styles.modalObservation, { color: color.text }]}>{observation}</Text>
-                  </View>
-                ) : null;
-              })()}
+              {getSafeText(task.observation) ? (
+                <View style={styles.modalSection}>
+                  <Text style={[styles.modalSectionTitle, { color: color.text }]}>Observation</Text>
+                  <Text style={[styles.modalObservation, { color: color.text }]}>{getSafeText(task.observation)}</Text>
+                </View>
+              ) : null}
               
               {/* Task Action Buttons */}
               <View style={[styles.modalTaskFooter, { borderTopColor: color.icon + '40' }]}>
                 {/* Comment Button - Left Side */}
                 <TouchableOpacity 
-                  style={[styles.modalTaskCommentButton, { backgroundColor: color.primary }]}
+                  style={[
+                    styles.modalTaskCommentButton, 
+                    { 
+                      backgroundColor: isLoading ? color.primary + '80' : color.primary,
+                      opacity: isLoading ? 0.7 : 1
+                    }
+                  ]}
                   onPress={() => {
                     // Add comment button - code to be added later
                   }}
+                  disabled={isLoading}
+                  activeOpacity={isLoading ? 0.5 : 0.8}
                 >
                   <Ionicons name="chatbubble-ellipses" size={20} color="white" />
                 </TouchableOpacity>
@@ -390,26 +396,47 @@ function TaskDetailsModal({ visible, task, onClose, color }) {
                 {/* Status-based Action Button - Right Side */}
                 {(() => {
                   const taskStatus = getSafeText(task.status).toLowerCase();
+                  
                   if (taskStatus === 'en attente') {
                     return (
                       <TouchableOpacity 
-                        style={[styles.modalTaskActionButton, { backgroundColor: '#FFC107' }]}
-                        onPress={() => {
-                          // Start task button - code to be added later
-                        }}
+                        style={[
+                          styles.modalTaskActionButton, 
+                          { 
+                            backgroundColor: isLoading ? '#FFC10780' : '#FFC107',
+                            opacity: isLoading ? 0.7 : 1
+                          }
+                        ]}
+                        onPress={() => onStartTask(task.id)}
+                        disabled={isLoading}
+                        activeOpacity={isLoading ? 0.5 : 0.8}
                       >
-                        <Text style={styles.modalTaskActionButtonText}>Démarrer</Text>
+                        {isLoading ? (
+                          <ActivityIndicator size="small" color="white" />
+                        ) : (
+                          <Text style={styles.modalTaskActionButtonText}>Démarrer</Text>
+                        )}
                       </TouchableOpacity>
                     );
                   } else if (taskStatus === 'en cours') {
                     return (
                       <TouchableOpacity 
-                        style={[styles.modalTaskActionButton, { backgroundColor: '#00C851' }]}
-                        onPress={() => {
-                          // End task button - code to be added later
-                        }}
+                        style={[
+                          styles.modalTaskActionButton, 
+                          { 
+                            backgroundColor: isLoading ? '#00C85180' : '#00C851',
+                            opacity: isLoading ? 0.7 : 1
+                          }
+                        ]}
+                        onPress={() => onFinishTask(task.id)}
+                        disabled={isLoading}
+                        activeOpacity={isLoading ? 0.5 : 0.8}
                       >
-                        <Text style={styles.modalTaskActionButtonText}>Terminer</Text>
+                        {isLoading ? (
+                          <ActivityIndicator size="small" color="white" />
+                        ) : (
+                          <Text style={styles.modalTaskActionButtonText}>Terminer</Text>
+                        )}
                       </TouchableOpacity>
                     );
                   }
@@ -468,24 +495,48 @@ function TaskDetailsModal({ visible, task, onClose, color }) {
                 {/* Footer with Action Buttons - Full Width */}
                 <View style={[styles.modalClientFooter, { borderTopColor: color.icon + '40' }]}>
                   <TouchableOpacity 
-                    style={[styles.modalClientActionButton, { backgroundColor: color.primary }]}
+                    style={[
+                      styles.modalClientActionButton, 
+                      { 
+                        backgroundColor: isLoading ? color.primary + '80' : color.primary,
+                        opacity: isLoading ? 0.7 : 1
+                      }
+                    ]}
                     onPress={handleCallClient}
+                    disabled={isLoading}
+                    activeOpacity={isLoading ? 0.5 : 0.8}
                   >
                     <Ionicons name="call" size={20} color="white" />
                   </TouchableOpacity>
                   
                   <TouchableOpacity 
-                    style={[styles.modalClientActionButton, { backgroundColor: color.primary }]}
+                    style={[
+                      styles.modalClientActionButton, 
+                      { 
+                        backgroundColor: isLoading ? color.primary + '80' : color.primary,
+                        opacity: isLoading ? 0.7 : 1
+                      }
+                    ]}
                     onPress={handleOpenMaps}
+                    disabled={isLoading}
+                    activeOpacity={isLoading ? 0.5 : 0.8}
                   >
                     <Ionicons name="map" size={20} color="white" />
                   </TouchableOpacity>
                   
                   <TouchableOpacity 
-                    style={[styles.modalClientActionButton, { backgroundColor: color.primary }]}
+                    style={[
+                      styles.modalClientActionButton, 
+                      { 
+                        backgroundColor: isLoading ? color.primary + '80' : color.primary,
+                        opacity: isLoading ? 0.7 : 1
+                      }
+                    ]}
                     onPress={() => {
                       // Client details button - code to be added later
                     }}
+                    disabled={isLoading}
+                    activeOpacity={isLoading ? 0.5 : 0.8}
                   >
                     <Ionicons name="person" size={20} color="white" />
                   </TouchableOpacity>
@@ -494,6 +545,176 @@ function TaskDetailsModal({ visible, task, onClose, color }) {
             ) : null;
           })()}
           </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+// Date Picker Modal Component
+function DatePickerModal({ visible, onClose, onDateSelect, color }) {
+  const [selectedDate, setSelectedDate] = useState(dayjs());
+  
+  const handleDateSelect = () => {
+    onDateSelect(selectedDate);
+    onClose();
+  };
+
+  const handleToday = () => {
+    setSelectedDate(dayjs());
+  };
+
+  const handleTomorrow = () => {
+    setSelectedDate(dayjs().add(1, 'day'));
+  };
+
+  const handleYesterday = () => {
+    setSelectedDate(dayjs().subtract(1, 'day'));
+  };
+
+  return (
+    <Modal
+      visible={visible}
+      transparent={true}
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <View style={styles.datePickerOverlay}>
+        <View style={[styles.datePickerContent, { backgroundColor: color.background }]}>
+          {/* Header */}
+          <View style={styles.datePickerHeader}>
+            <Text style={[styles.datePickerTitle, { color: color.text }]}>Select Date</Text>
+            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+              <Ionicons name="close" size={24} color={color.text} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Quick Date Buttons */}
+          <View style={styles.quickDateButtons}>
+            <TouchableOpacity 
+              style={[styles.quickDateButton, { backgroundColor: color.primary }]}
+              onPress={handleToday}
+            >
+              <Text style={styles.quickDateButtonText}>Today</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[styles.quickDateButton, { backgroundColor: color.primary }]}
+              onPress={handleTomorrow}
+            >
+              <Text style={styles.quickDateButtonText}>Tomorrow</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[styles.quickDateButton, { backgroundColor: color.primary }]}
+              onPress={handleYesterday}
+            >
+              <Text style={styles.quickDateButtonText}>Yesterday</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Calendar View */}
+          <View style={styles.calendarContainer}>
+            <Text style={[styles.calendarTitle, { color: color.text }]}>Select a date:</Text>
+            
+            {/* Month Navigation */}
+            <View style={styles.monthNavigation}>
+              <TouchableOpacity 
+                style={styles.monthNavButton}
+                onPress={() => setSelectedDate(selectedDate.subtract(1, 'month'))}
+              >
+                <Ionicons name="chevron-back" size={20} color={color.icon} />
+              </TouchableOpacity>
+              
+              <Text style={[styles.monthYearText, { color: color.text }]}>
+                {selectedDate.format('MMMM YYYY')}
+              </Text>
+              
+              <TouchableOpacity 
+                style={styles.monthNavButton}
+                onPress={() => setSelectedDate(selectedDate.add(1, 'month'))}
+              >
+                <Ionicons name="chevron-forward" size={20} color={color.icon} />
+              </TouchableOpacity>
+            </View>
+            
+            {/* Calendar Grid */}
+            <View style={styles.calendarGrid}>
+              {/* Day Headers */}
+              <View style={styles.dayHeaders}>
+                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                  <Text key={day} style={[styles.dayHeader, { color: color.icon }]}>
+                    {day}
+                  </Text>
+                ))}
+              </View>
+              
+              {/* Calendar Days */}
+              <View style={styles.calendarDays}>
+                {(() => {
+                  const startOfMonth = selectedDate.startOf('month');
+                  const endOfMonth = selectedDate.endOf('month');
+                  const startDate = startOfMonth.startOf('week');
+                  const endDate = endOfMonth.endOf('week');
+                  const days = [];
+                  
+                  let currentDate = startDate;
+                  while (currentDate.isBefore(endDate) || currentDate.isSame(endDate, 'day')) {
+                    days.push(currentDate);
+                    currentDate = currentDate.add(1, 'day');
+                  }
+                  
+                  return days.map((date, index) => {
+                    const isCurrentMonth = date.isSame(selectedDate, 'month');
+                    const isSelected = date.isSame(selectedDate, 'day');
+                    const isToday = date.isSame(dayjs(), 'day');
+                    
+                    return (
+                      <TouchableOpacity
+                        key={index}
+                        style={[
+                          styles.calendarDay,
+                          isSelected && styles.calendarDaySelected,
+                          isToday && !isSelected && styles.calendarDayToday
+                        ]}
+                        onPress={() => setSelectedDate(date)}
+                      >
+                        <Text style={[
+                          styles.calendarDayText,
+                          { 
+                            color: isSelected ? 'white' : 
+                                   isToday ? color.primary : 
+                                   isCurrentMonth ? color.text : color.icon + '60'
+                          },
+                          isSelected && styles.calendarDayTextSelected,
+                          isToday && !isSelected && styles.calendarDayTextToday
+                        ]}>
+                          {date.date()}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  });
+                })()}
+              </View>
+            </View>
+          </View>
+
+          {/* Action Buttons */}
+          <View style={styles.datePickerActions}>
+            <TouchableOpacity 
+              style={[styles.datePickerButton, { backgroundColor: color.icon }]}
+              onPress={onClose}
+            >
+              <Text style={styles.datePickerButtonText}>Cancel</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[styles.datePickerButton, { backgroundColor: color.primary }]}
+              onPress={handleDateSelect}
+            >
+              <Text style={styles.datePickerButtonText}>Go to Date</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     </Modal>
@@ -582,10 +803,9 @@ function TaskCard({ task, color, onTaskPress }) {
         },
       ]}>
         <View style={styles.taskCardContent}>
-          {task.urgent && (() => {
-            const urgentColor = getUrgentDotColor();
-            return <View style={[styles.urgentDotLeft, { backgroundColor: urgentColor, borderColor: color.background }]} />;
-          })()}
+          {task.urgent ? (
+            <View style={[styles.urgentDotLeft, { backgroundColor: getUrgentDotColor(), borderColor: color.background }]} />
+          ) : null}
           <View style={styles.taskCardTextSection}>
             <Text style={[styles.taskName, { color: color.text }]}>{(() => {
               const taskName = getSafeText(task.task_name, 'Untitled Task');
@@ -622,10 +842,10 @@ function TaskCard({ task, color, onTaskPress }) {
   );
 }
 
-const INITIAL_TABS = 7;
+const TOTAL_TABS = 21; // 10 before + today + 10 after
 const today = dayjs();
-const initialDates = Array.from({ length: INITIAL_TABS }, (_, i) =>
-  today.add(i - Math.floor(INITIAL_TABS / 2), 'day')
+const initialDates = Array.from({ length: TOTAL_TABS }, (_, i) =>
+  today.add(i - 10, 'day') // Start 10 days before today
 );
 
 export default function Tasks() {
@@ -637,38 +857,39 @@ export default function Tasks() {
   const [tasksByDate, setTasksByDate] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [index, setIndex] = useState(Math.floor(INITIAL_TABS / 2)); // center on today
+  const [index, setIndex] = useState(10); // Center on today (index 10)
   const [routes, setRoutes] = useState([]);
   const tabRefs = useRef([]);
   const scrollViewRef = useRef(null);
   const [tabLayouts, setTabLayouts] = useState({});
-  const [pendingIndexShift, setPendingIndexShift] = useState(null);
+
   
   // Modal state
   const [selectedTask, setSelectedTask] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
+  
+  // Date picker modal state
+  const [datePickerVisible, setDatePickerVisible] = useState(false);
+  
+  // Track when we're updating dates
+  const isUpdatingDates = useRef(false);
+  
+    // Force index state
+  const [forceIndex, setForceIndex] = useState(null);
+  
+  // Task action loading state
+  const [taskActionLoading, setTaskActionLoading] = useState(false);
 
-  // Infinite date logic
-  const THRESHOLD = 2;
-  const PREPEND_COUNT = 7;
-  const APPEND_COUNT = 7;
-  const prependDates = (currentIndex) => {
-    const first = dates[0];
-    const newDates = [];
-    for (let i = PREPEND_COUNT; i >= 1; i--) {
-      newDates.push(first.subtract(i, 'day'));
-    }
-    setDates(prev => [...newDates, ...prev]);
-    setPendingIndexShift(currentIndex + PREPEND_COUNT);
+  // Helper function to show toast
+  const showToast = (message, type = 'success') => {
+    Alert.alert(
+      type === 'success' ? 'Succès' : type === 'error' ? 'Erreur' : 'Information',
+      message,
+      [{ text: 'OK', style: 'default' }]
+    );
   };
-  const appendDates = () => {
-    const last = dates[dates.length - 1];
-    const newDates = [];
-    for (let i = 1; i <= APPEND_COUNT; i++) {
-      newDates.push(last.add(i, 'day'));
-    }
-    setDates(prev => [...prev, ...newDates]);
-  };
+
+
 
   useEffect(() => {
     setRoutes(
@@ -679,6 +900,52 @@ export default function Tasks() {
       }))
     );
   }, [dates]);
+  
+  // Separate effect to handle index setting after routes are updated
+  useEffect(() => {
+    console.log('=== ROUTES EFFECT TRIGGERED ===');
+    console.log('Routes length:', routes.length);
+    console.log('Current index:', index);
+    
+    // Only run this when routes change (not on initial load)
+    if (routes.length > 0 && routes.length === TOTAL_TABS) {
+      console.log('Routes changed, checking if we need to center...');
+      
+      // Check if this is a date update (not initial load)
+      const currentCenterDate = routes[10]?.date;
+      console.log('Center date from routes:', currentCenterDate?.format('YYYY-MM-DD'));
+      
+      if (currentCenterDate && !currentCenterDate.isSame(dayjs(), 'day')) {
+        console.log('Date range changed, centering on index 10...');
+        // Force index to center
+        setIndex(10);
+        setSelectedDate(currentCenterDate);
+        console.log('Index forced to 10');
+      }
+    }
+    
+    console.log('=== ROUTES EFFECT END ===');
+  }, [routes]);
+  
+  // Effect to handle forced index changes
+  useEffect(() => {
+    if (forceIndex !== null) {
+      console.log('=== FORCE INDEX EFFECT ===');
+      console.log('Force index value:', forceIndex);
+      console.log('Current index:', index);
+      
+      // Apply the forced index
+      setIndex(forceIndex);
+      if (dates[forceIndex]) {
+        setSelectedDate(dates[forceIndex]);
+      }
+      
+      // Clear the force index
+      setForceIndex(null);
+      console.log('Force index applied and cleared');
+      console.log('=== FORCE INDEX END ===');
+    }
+  }, [forceIndex, dates]);
 
   // Only load tasks for the visible tab (and optionally adjacent tabs)
   useEffect(() => {
@@ -719,6 +986,10 @@ export default function Tasks() {
 
   // Center selected tab in ScrollView
   useEffect(() => {
+    console.log('=== TAB CENTERING EFFECT ===');
+    console.log('Index:', index);
+    console.log('Tab layouts:', Object.keys(tabLayouts));
+    
     const layout = tabLayouts[index];
     if (
       !layout ||
@@ -728,8 +999,6 @@ export default function Tasks() {
       isNaN(layout.width) ||
       !scrollViewRef.current
     ) {
-      // If we have a pending index shift, try again later
-      if (pendingIndexShift !== null) return;
       console.log('Tab centering skipped:', { index, layout, tabLayouts });
       return;
     }
@@ -740,15 +1009,12 @@ export default function Tasks() {
         x: x + width / 2 - 180, // 180 = half of screen width (360/2)
         animated: true,
       });
+      console.log('Tab centered successfully');
     } catch (err) {
       console.error('Tab centering scroll error:', err);
     }
-    // If we have a pending index shift, do it now
-    if (pendingIndexShift !== null) {
-      setIndex(pendingIndexShift);
-      setPendingIndexShift(null);
-    }
-  }, [index, tabLayouts, pendingIndexShift]);
+    console.log('=== TAB CENTERING END ===');
+  }, [index, tabLayouts]);
 
   // Handle task press to open modal
   const handleTaskPress = async (task) => {
@@ -781,6 +1047,23 @@ export default function Tasks() {
   const closeModal = () => {
     setModalVisible(false);
     setSelectedTask(null);
+    // Refresh tasks for the current date to show updated statuses
+    if (selectedDate && user?.id) {
+      const dateKey = selectedDate.format('YYYY-MM-DD');
+      api.get(`/tasks?technician_id=${user.id}&date=${dateKey}`)
+        .then(res => {
+          if (res.data.success) {
+            setTasksByDate(prev => ({
+              ...prev,
+              [dateKey]: res.data.tasks
+            }));
+          }
+        })
+        .catch(e => {
+          console.error('Error refreshing tasks:', e);
+          showToast('Erreur lors du rafraîchissement des tâches', 'error');
+        });
+    }
   };
   
   // Clean up modal when component unmounts or user changes
@@ -849,24 +1132,154 @@ export default function Tasks() {
     </View>
   );
 
-  // Infinite logic: add more dates when swiping near first/last tab
+  // Handle tab index change
   const handleIndexChange = (i) => {
-    if (i <= THRESHOLD) {
-      prependDates(i);
-      // Don't shift index yet; wait for layouts to be measured
-    } else if (i >= dates.length - 1 - THRESHOLD) {
-      appendDates();
-      setIndex(i); // allow normal index change
-      setSelectedDate(dates[i]);
-    } else {
-      setIndex(i);
-      setSelectedDate(dates[i]);
+    console.log('=== INDEX CHANGE REQUESTED ===');
+    console.log('Requested index:', i);
+    console.log('Current index:', index);
+    console.log('Is updating dates:', isUpdatingDates.current);
+    
+    // Don't allow index changes while updating dates
+    if (isUpdatingDates.current) {
+      console.log('Blocking index change to', i, 'while updating dates');
+      return;
     }
+    
+    console.log('Allowing index change to', i);
+    setIndex(i);
+    setSelectedDate(dates[i]);
+    console.log('=== INDEX CHANGE COMPLETED ===');
+  };
+
+  // Handle task start
+  const handleStartTask = async (taskId) => {
+    if (!taskId) return;
+    
+    setTaskActionLoading(true);
+    try {
+      const response = await api.put(`/tasks/${taskId}/start`);
+      
+      if (response.data.success) {
+        // Haptic feedback for success
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        
+        // Update the selected task with new status
+        setSelectedTask(prev => ({
+          ...prev,
+          status: 'en cours',
+          started_at: response.data.task.started_at
+        }));
+        
+        // Update the task in the list
+        const newTasksByDate = { ...tasksByDate };
+        Object.keys(newTasksByDate).forEach(dateKey => {
+          newTasksByDate[dateKey] = newTasksByDate[dateKey].map(task => 
+            task.id === taskId 
+              ? { ...task, status: 'en cours', started_at: response.data.task.started_at }
+              : task
+          );
+        });
+        setTasksByDate(newTasksByDate);
+        
+        // Show success message
+        showToast('Tâche démarrée avec succès', 'success');
+      } else {
+        // Haptic feedback for error
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        showToast('Erreur lors du démarrage de la tâche', 'error');
+      }
+    } catch (error) {
+      console.error('Error starting task:', error);
+      // Haptic feedback for error
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      showToast('Erreur de connexion. Veuillez réessayer.', 'error');
+    } finally {
+      setTaskActionLoading(false);
+    }
+  };
+
+  // Handle task finish
+  const handleFinishTask = async (taskId) => {
+    if (!taskId) return;
+    
+    setTaskActionLoading(true);
+    try {
+      const response = await api.put(`/tasks/${taskId}/finish`);
+      
+      if (response.data.success) {
+        // Haptic feedback for success
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        
+        // Update the selected task with new status
+        setSelectedTask(prev => ({
+          ...prev,
+          status: 'terminée',
+          finished_at: response.data.task.finished_at
+        }));
+        
+        // Update the task in the list
+        const newTasksByDate = { ...tasksByDate };
+        Object.keys(newTasksByDate).forEach(dateKey => {
+          newTasksByDate[dateKey] = newTasksByDate[dateKey].map(task => 
+            task.id === taskId 
+              ? { ...task, status: 'terminée', finished_at: response.data.task.finished_at }
+              : task
+          );
+        });
+        setTasksByDate(newTasksByDate);
+        
+        // Show success message
+        showToast('Tâche terminée avec succès', 'success');
+      } else {
+        // Haptic feedback for error
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        showToast('Erreur lors de la finalisation de la tâche', 'error');
+      }
+    } catch (error) {
+      console.error('Error finishing task:', error);
+      // Haptic feedback for error
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      showToast('Erreur de connexion. Veuillez réessayer.', 'error');
+    } finally {
+      setTaskActionLoading(false);
+    }
+  };
+
+  // Handle date selection from picker
+  const handleDateSelect = (selectedDate) => {
+    console.log('=== DATE SELECTION START ===');
+    console.log('Current index before selection:', index);
+    console.log('Current dates length:', dates.length);
+    
+    // Generate new 21-day range centered on selected date
+    const newDates = generateDateRange(selectedDate);
+    
+    // Debug: Log the generated dates
+    console.log('Selected date:', selectedDate.format('YYYY-MM-DD'));
+    console.log('Generated dates:', newDates.map(d => d.format('YYYY-MM-DD')));
+    console.log('Center index 10 date:', newDates[10].format('YYYY-MM-DD'));
+    
+    // Clear existing tasks first
+    setTasksByDate({});
+    
+    // Update dates
+    console.log('Setting new dates...');
+    setDates(newDates);
+    
+    // Set force index to 10
+    console.log('Setting force index to 10...');
+    setForceIndex(10);
+    
+    // Haptic feedback
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    
+    console.log('=== DATE SELECTION END ===');
   };
 
   return (
     <>
       <TabView
+        key={`${dates[0]?.format('YYYY-MM-DD')}-${dates[10]?.format('YYYY-MM-DD')}`} // Force re-render when dates change
         navigationState={{ index, routes }}
         renderScene={renderScene}
         onIndexChange={handleIndexChange}
@@ -880,7 +1293,28 @@ export default function Tasks() {
         task={selectedTask}
         onClose={closeModal}
         color={color}
+        onStartTask={handleStartTask}
+        onFinishTask={handleFinishTask}
+        isLoading={taskActionLoading}
       />
+      
+      {/* Floating Action Button */}
+      <TouchableOpacity
+        style={[styles.fab, { backgroundColor: color.primary }]}
+        onPress={() => setDatePickerVisible(true)}
+        activeOpacity={0.8}
+      >
+        <Ionicons name="calendar" size={24} color="white" />
+      </TouchableOpacity>
+      
+      {/* Date Picker Modal */}
+      <DatePickerModal
+        visible={datePickerVisible}
+        onClose={() => setDatePickerVisible(false)}
+        onDateSelect={handleDateSelect}
+        color={color}
+      />
+      
     </>
   );
 }
@@ -1041,6 +1475,19 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textTransform: 'capitalize',
     color: 'white',
+  },
+  // Custom Modal Overlay styles
+  customModalOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    zIndex: 9999,
+    elevation: 9999,
   },
   // Modal styles
   modalOverlay: {
@@ -1269,5 +1716,163 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     textAlign: 'center',
     numberOfLines: 1,
+  },
+  
+  // Floating Action Button styles
+  fab: {
+    position: 'absolute',
+    bottom: 20,
+    right: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    zIndex: 1000,
+  },
+  
+  // Date Picker Modal styles
+  datePickerOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  datePickerContent: {
+    width: '90%',
+    borderRadius: 15,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  datePickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  datePickerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  quickDateButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    padding: 15,
+    gap: 10,
+  },
+  quickDateButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    minWidth: 80,
+    alignItems: 'center',
+  },
+  quickDateButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  // Calendar styles
+  calendarContainer: {
+    padding: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  calendarTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 15,
+    textAlign: 'center',
+  },
+  monthNavigation: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  monthNavButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+  },
+  monthYearText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    flex: 1,
+  },
+  calendarGrid: {
+    marginTop: 10,
+  },
+  dayHeaders: {
+    flexDirection: 'row',
+    marginBottom: 10,
+  },
+  dayHeader: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 12,
+    fontWeight: '600',
+    paddingVertical: 8,
+  },
+  calendarDays: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 5,
+  },
+  calendarDay: {
+    width: '14.28%', // 100% / 7 days
+    aspectRatio: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginVertical: 2,
+    paddingHorizontal: 2,
+  },
+  calendarDaySelected: {
+    backgroundColor: '#2CBEE8',
+    borderRadius: 20,
+  },
+  calendarDayToday: {
+    backgroundColor: 'rgba(44, 190, 232, 0.2)',
+    borderRadius: 20,
+  },
+  calendarDayText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  calendarDayTextSelected: {
+    fontWeight: 'bold',
+  },
+  calendarDayTextToday: {
+    fontWeight: '600',
+  },
+  datePickerActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    padding: 15,
+    gap: 10,
+  },
+  datePickerButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+    minWidth: 100,
+    alignItems: 'center',
+  },
+  datePickerButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
