@@ -2,8 +2,8 @@ import axios from 'axios';
 import { getToken } from './storage';
 
 const api = axios.create({
-  baseURL: 'https://eurodental.ma/api',  // <-- PUT your Laravel API URL here
-  timeout: 5000,
+  baseURL: 'https://eurodental.ma/api',
+  timeout: 10000,
 });
 
 api.interceptors.request.use(

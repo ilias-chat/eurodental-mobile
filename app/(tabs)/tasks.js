@@ -2,6 +2,7 @@ import api from '@/api/axios'; // <-- Use the axios instance
 import { useAuth } from '@/components/AuthContext';
 
 import { Colors } from '@/constants/Colors';
+
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@react-navigation/native';
 import dayjs from 'dayjs';
@@ -1285,6 +1286,8 @@ export default function Tasks() {
 
   return (
     <>
+
+
       <TabView
         key={`${dates[0]?.format('YYYY-MM-DD')}-${dates[10]?.format('YYYY-MM-DD')}`} // Force re-render when dates change
         navigationState={{ index, routes }}
@@ -1333,6 +1336,7 @@ export default function Tasks() {
 }
 
 const styles = StyleSheet.create({
+
   topBar: {
     height: 56,
     justifyContent: 'center',
